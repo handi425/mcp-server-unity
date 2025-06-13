@@ -21,7 +21,7 @@ export interface BatchOperation {
 export class UnityRefreshService extends BaseService {
   private batchOperations: BatchOperation[] = [];
   private batchModeActive: boolean = false;
-  private refreshTimeout?: NodeJS.Timeout;
+  private refreshTimeout?: ReturnType<typeof setTimeout>;
 
   constructor(logger: Logger) {
     super(logger);
@@ -36,7 +36,7 @@ export class UnityRefreshService extends BaseService {
 
     const scriptPath = path.join(editorPath, 'UnityRefreshHandler.cs');
     const scriptContent = getUnityRefreshHandlerTemplate();
-    
+
     await fs.writeFile(scriptPath, scriptContent, 'utf-8');
 
     this.logger.info('Unity refresh handler script created');
@@ -58,7 +58,7 @@ export class UnityRefreshService extends BaseService {
     await ensureDirectory(tempPath);
 
     const triggerPath = path.join(tempPath, 'unity_refresh_trigger.txt');
-    
+
     // Build refresh options content
     let content = '';
     if (options) {
@@ -83,7 +83,7 @@ export class UnityRefreshService extends BaseService {
     // Write trigger file with timestamp to ensure change detection
     const timestampedContent = `timestamp: ${Date.now()}\n${content || 'refresh'}`;
     await fs.writeFile(triggerPath, timestampedContent, 'utf-8');
-    
+
     // Also touch the file to ensure filesystem watcher triggers
     const now = new Date();
     await fs.utimes(triggerPath, now, now);
@@ -93,7 +93,7 @@ export class UnityRefreshService extends BaseService {
     // Create a lock file to ensure Unity processes the refresh
     const lockPath = path.join(tempPath, 'unity_refresh_lock.txt');
     await fs.writeFile(lockPath, 'processing', 'utf-8');
-    
+
     // Remove lock after a short delay
     setTimeout(async () => {
       try {
@@ -116,7 +116,7 @@ export class UnityRefreshService extends BaseService {
   async startBatchOperation(): Promise<CallToolResult> {
     this.batchModeActive = true;
     this.batchOperations = [];
-    
+
     // Clear any existing timeout
     if (this.refreshTimeout) {
       clearTimeout(this.refreshTimeout);
@@ -147,7 +147,7 @@ export class UnityRefreshService extends BaseService {
     }
 
     this.batchModeActive = false;
-    
+
     if (this.batchOperations.length === 0) {
       return {
         content: [
@@ -178,15 +178,15 @@ export class UnityRefreshService extends BaseService {
   async addBatchOperation(operation: BatchOperation): Promise<void> {
     if (this.batchModeActive) {
       this.batchOperations.push(operation);
-      
+
       // Reset auto-end timeout
       if (this.refreshTimeout) {
         clearTimeout(this.refreshTimeout);
       }
-      
+
       // Auto-end batch after 5 seconds of inactivity
       this.refreshTimeout = setTimeout(() => {
-        this.endBatchOperation().catch(err => 
+        this.endBatchOperation().catch(err =>
           this.logger.error('Error auto-ending batch operation', err)
         );
       }, 5000);
@@ -200,7 +200,7 @@ export class UnityRefreshService extends BaseService {
     await ensureDirectory(tempPath);
 
     const batchPath = path.join(tempPath, 'unity_batch_operation.txt');
-    
+
     // Build batch operation content
     const content = this.batchOperations
       .map(op => `${op.type}: ${op.path}`)
@@ -229,10 +229,10 @@ export class UnityRefreshService extends BaseService {
 
     // Otherwise, create and refresh
     const result = await createFn();
-    
+
     // Determine if recompilation is needed
-    const needsRecompile = forceRecompile || 
-      assetPath.endsWith('.cs') || 
+    const needsRecompile = forceRecompile ||
+      assetPath.endsWith('.cs') ||
       assetPath.endsWith('.shader') ||
       assetPath.endsWith('.cginc') ||
       assetPath.endsWith('.hlsl');
